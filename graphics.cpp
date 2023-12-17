@@ -109,6 +109,7 @@ void Graphics::run() {
                 };
             }
         }
+        (void)keys;
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
         SDL_RenderClear(renderer);
         // measure fps
