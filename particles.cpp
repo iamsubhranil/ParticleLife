@@ -3,7 +3,9 @@
 #include <SDL2/SDL_pixels.h>
 #include <SDL2/SDL_render.h>
 
+#include <mutex>
 #include <random>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -41,6 +43,10 @@ float interactionMatrix[MaxColor + 1][MaxColor + 1] = {{0.0}};
 const static float cutOffX = 100;
 const static float cutOffY = 100;
 
+std::mutex particleMutexes[MaxColor + 1] = {
+    std::mutex(), std::mutex(), std::mutex(), std::mutex(),
+    std::mutex(), std::mutex(), std::mutex()};
+
 void Particles::init() {
     std::uniform_real_distribution<float> heightDist(0, Graphics::HEIGHT);
     std::uniform_real_distribution<float> widthDist(0, Graphics::WIDTH);
@@ -74,12 +80,8 @@ void Particles::init() {
 static const float maxFx = 300;
 static const float maxFy = 300;
 
-void Particles::interact(int type1, int type2, float g) {
-    auto &particles1 = particles[type1];
-    auto &particles2 = particles[type2];
-    auto &particleVelocities1 = particleVelocities[type1];
-    // auto &particleTargetVelocities1 = particleTargetVelocities[type1];
-
+void interact(auto &particles1, auto &particles2, auto &particleVelocities1,
+              float g) {
     for (size_t i = 0; i < particles1.size(); i++) {
         float fx = 0;
         float fy = 0;
@@ -129,12 +131,59 @@ void Particles::interact(int type1, int type2, float g) {
     }
 }
 
+void interact_wrapper(int type1, int type2, float g, std::mutex &m1,
+                      std::mutex &m2) {
+    // printf("[ LOCK ] %d %d\n", type1, type2);
+    std::scoped_lock lck{m1, m2};
+
+    auto &particles1 = particles[type1];
+    auto &particles2 = particles[type2];
+    auto &particleVelocities1 = particleVelocities[type1];
+
+    interact(particles1, particles2, particleVelocities1, g);
+
+    // printf("[UNLOCK] %d %d\n", type1, type2);
+}
+
+void interact_wrapper0(int type1, float g, std::mutex &m1) {
+    std::scoped_lock lck{m1};
+
+    auto &particles1 = particles[type1];
+    auto &particleVelocities1 = particleVelocities[type1];
+
+    interact(particles1, particles1, particleVelocities1, g);
+
+    // printf("[UNLOCK] %d %d\n", type1, type1);
+}
+
 void Particles::draw(SDL_Renderer *renderer) {
+    std::thread threads[MaxColor + 1][MaxColor + 1];
     for (int col1 = MinColor; col1 < MaxColor + 1; col1++) {
         for (int col2 = MinColor; col2 < MaxColor + 1; col2++) {
-            interact(col1, col2, interactionMatrix[col1][col2]);
+            // printf("[ SPAWN] %d %d\n", col1, col2);
+            if (col1 == col2) {
+                threads[col1][col2] = std::thread(
+                    interact_wrapper0, col1, interactionMatrix[col1][col2],
+                    std::ref(particleMutexes[col1]));
+            } else {
+                threads[col1][col2] = std::thread(
+                    interact_wrapper, col1, col2, interactionMatrix[col1][col2],
+                    std::ref(particleMutexes[col1]),
+                    std::ref(particleMutexes[col2]));
+            }
+            // threads[col1][col2].join();
         }
     }
+
+    for (int col1 = MinColor; col1 < MaxColor + 1; col1++) {
+        for (int col2 = MinColor; col2 < MaxColor + 1; col2++) {
+            // printf("[ WAIT ] %d %d joinable: %s\n", col1, col2,
+            //       threads[col1][col2].joinable() ? "yes" : "no");
+            threads[col1][col2].join();
+            // printf("[JOINED] %d %d\n", col1, col2);
+        }
+    }
+
     for (int col = MinColor; col < MaxColor + 1; col++) {
         SDL_SetRenderDrawColor(renderer, colorValues[col].r, colorValues[col].g,
                                colorValues[col].b, colorValues[col].a);
