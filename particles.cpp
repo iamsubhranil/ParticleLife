@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "graphics.h"
+#include "threadpool.h"
 
 static const int numParticles = 1500;
 
@@ -46,6 +47,8 @@ const static float cutOffY = 100;
 std::mutex particleMutexes[MaxColor + 1] = {
     std::mutex(), std::mutex(), std::mutex(), std::mutex(),
     std::mutex(), std::mutex(), std::mutex()};
+
+Threadpool threadPool = Threadpool();
 
 void Particles::init() {
     std::uniform_real_distribution<float> heightDist(0, Graphics::HEIGHT);
@@ -160,29 +163,20 @@ void Particles::draw(SDL_Renderer *renderer) {
     std::thread threads[MaxColor + 1][MaxColor + 1];
     for (int col1 = MinColor; col1 < MaxColor + 1; col1++) {
         for (int col2 = MinColor; col2 < MaxColor + 1; col2++) {
-            // printf("[ SPAWN] %d %d\n", col1, col2);
             if (col1 == col2) {
-                threads[col1][col2] = std::thread(
-                    interact_wrapper0, col1, interactionMatrix[col1][col2],
-                    std::ref(particleMutexes[col1]));
+                threadPool.submit(interact_wrapper0, col1,
+                                  interactionMatrix[col1][col1],
+                                  std::ref(particleMutexes[col1]));
             } else {
-                threads[col1][col2] = std::thread(
-                    interact_wrapper, col1, col2, interactionMatrix[col1][col2],
-                    std::ref(particleMutexes[col1]),
-                    std::ref(particleMutexes[col2]));
+                threadPool.submit(interact_wrapper, col1, col2,
+                                  interactionMatrix[col1][col2],
+                                  std::ref(particleMutexes[col1]),
+                                  std::ref(particleMutexes[col2]));
             }
-            // threads[col1][col2].join();
         }
     }
 
-    for (int col1 = MinColor; col1 < MaxColor + 1; col1++) {
-        for (int col2 = MinColor; col2 < MaxColor + 1; col2++) {
-            // printf("[ WAIT ] %d %d joinable: %s\n", col1, col2,
-            //       threads[col1][col2].joinable() ? "yes" : "no");
-            threads[col1][col2].join();
-            // printf("[JOINED] %d %d\n", col1, col2);
-        }
-    }
+    threadPool.join();
 
     for (int col = MinColor; col < MaxColor + 1; col++) {
         SDL_SetRenderDrawColor(renderer, colorValues[col].r, colorValues[col].g,
