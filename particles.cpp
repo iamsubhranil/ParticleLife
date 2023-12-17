@@ -12,7 +12,7 @@
 #include "graphics.h"
 #include "threadpool.h"
 
-static const int numParticles = 1500;
+static const int numParticles = 2000;
 
 static const SDL_Color colorValues[] = {
     SDL_Color(251, 73, 52, 255),   SDL_Color(131, 165, 152, 255),
@@ -69,7 +69,7 @@ void Particles::init() {
         }
     }
 
-    std::normal_distribution<float> interactDist(-15, 15);
+    std::normal_distribution<float> interactDist(-0.5, 0.5);
     for (int col1 = MinColor; col1 < MaxColor + 1; col1++) {
         for (int col2 = MinColor; col2 < MaxColor + 1; col2++) {
             // if (col1 == col2)
@@ -99,7 +99,7 @@ void interact(auto &particles1, auto &particles2, auto &particleVelocities1,
             // if (dy > cutOffY || dy < -cutOffY) continue;
 
             float d = std::sqrt(dx * dx + dy * dy);
-            if (d > 0 && d < 80) {
+            if (d > 0 && d < 120) {
                 float F = g * 1 / d;
                 fx += (F * dx);
                 fy += (F * dy);
@@ -109,14 +109,14 @@ void interact(auto &particles1, auto &particles2, auto &particleVelocities1,
         auto &vx = std::get<0>(particleVelocities1[i]);
         auto &vy = std::get<1>(particleVelocities1[i]);
 
-        vx = (vx + fx) * 0.05;
-        vy = (vy + fy) * 0.05;
+        vx = (vx + fx) * 0.2;
+        vy = (vy + fy) * 0.2;
 
         p1.x += vx;
         p1.y += vy;
 
         if (p1.x < 0 || p1.x > Graphics::WIDTH) {
-            vx *= -1;
+            // vx *= -1;
             if (p1.x < 0) {
                 p1.x += Graphics::WIDTH;
             } else {
@@ -124,7 +124,7 @@ void interact(auto &particles1, auto &particles2, auto &particleVelocities1,
             }
         }
         if (p1.y < 0 || p1.y > Graphics::HEIGHT) {
-            vy *= -1;
+            // vy *= -1;
             if (p1.y < 0) {
                 p1.y += Graphics::HEIGHT;
             } else {
